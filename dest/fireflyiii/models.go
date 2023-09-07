@@ -6,11 +6,11 @@ import (
 	"math"
 	"time"
 
-	"github.com/sudores/firefly-iii-bank-sync/bank/dto"
 	"github.com/rmg/iso4217"
+	"github.com/sudores/firefly-iii-bank-sync/bank/dto"
 )
 
-const bpfsTag = "bpfs"
+const fbsTag = "firefly-iii-bank-sync"
 
 // transaction represents fireflyiii transaction
 type transaction struct {
@@ -31,7 +31,7 @@ type transactionSplitStore struct {
 	Amount      string    `json:"amount"`
 	Notes       string    `json:"notes"`
 
-	// Tags - tag bpfs added by default
+	// Tags - tag firefly-iii-bank-sync added by default
 	Tags              []string `json:"tags"`
 	SourceName        string   `json:"source_name"`
 	CategoryName      string   `json:"category_name"`
@@ -88,7 +88,7 @@ func transactionDTOToTransaction(trans *dto.TransactionDTO) *transaction {
 	tr.Transactions[0].Amount = fmt.Sprint(math.Abs(float64(trans.Transaction.Amount)) / 100)
 	tr.Transactions[0].Description = trans.Transaction.Description
 	tr.Transactions[0].ExternalID = "AccountId: " + trans.AccountID
-	tr.Transactions[0].Tags = append(tr.Transactions[0].Tags, bpfsTag)
+	tr.Transactions[0].Tags = append(tr.Transactions[0].Tags, fbsTag)
 
 	tr.Transactions[0].Notes = fmt.Sprintln(tr.Transactions[0].Notes+"MCC:", trans.Transaction.MCC)
 	tr.Transactions[0].Notes = fmt.Sprintln(tr.Transactions[0].Notes+"Comment:", trans.Transaction.Comment)
