@@ -5,7 +5,7 @@ import "github.com/caarlos0/env"
 // Cnf the config object with configuration parameters
 type Cnf struct {
 	MonobankAPIToken string `env:"MONOBANK_API_TOKEN,required"`
-	FBSHost          string `env:"FBSHost,required"`
+	FBSHost          string `env:"FBS_HOST,required"`
 	LogLevel         string `env:"LOG_LEVEL" envDefault:"debug"`
 	ListenAddr       string `env:"LISTEN_ADDRESS" envDefault:":3000"`
 	FFIToken         string `env:"FFI_TOKEN,required"`

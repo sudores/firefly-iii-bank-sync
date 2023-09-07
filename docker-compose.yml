@@ -1,0 +1,15 @@
+version: '3'
+services:
+  firefly-iii-bank-sync:
+    container_name: firefly-iii-bank-sync
+    image: vepl/firefly-iii-bank-sync:latest
+    build:
+      context: .
+    environment:
+      - MONOBANK_API_TOKEN="sample_token"
+      - FBS_HOST="host_where_app_is_accessible"
+      - LOG_LEVEL="info"
+      - FFI_TOKEN="Your firefly PAT token"
+      - FFI_URL="Your firefly installation URL"
+
+
