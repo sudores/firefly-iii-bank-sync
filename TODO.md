@@ -5,4 +5,5 @@
 - Add graceful shutdown of the app. Via adding signals handling
   and context to send graceful shutdown
 - Add database to store transactions to make things more consistent
+- Add transfers recognition
 - Add additional sources support
