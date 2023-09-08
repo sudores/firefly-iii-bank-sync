@@ -11,9 +11,9 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sudores/firefly-iii-bank-sync/bank/dto"
 	"github.com/sudores/firefly-iii-bank-sync/util"
-	"github.com/rs/zerolog/log"
 )
 
 type MonoConnection struct {
@@ -22,20 +22,20 @@ type MonoConnection struct {
 
 	listenAddr string
 
-	bPFSHost    string
-	bPFSURLPath string
+	fBSHost    string
+	fBSURLPath string
 
 	webhookInitNotify chan uint8
 	TransactionChan   chan *dto.TransactionDTO
 }
 
-func NewMonoConnetion(APIToken, BPFSHost, listenAddr string) *MonoConnection {
+func NewMonoConnetion(APIToken, FBSHost, listenAddr string) *MonoConnection {
 	return &MonoConnection{
 		monoAPIURL:      monoAPIURL,
 		monoAPIToken:    APIToken,
 		listenAddr:      listenAddr,
-		bPFSHost:        BPFSHost,
-		bPFSURLPath:     "/" + getPathSuffix(),
+		fBSHost:         FBSHost,
+		fBSURLPath:      "/" + getPathSuffix(),
 		TransactionChan: make(chan *dto.TransactionDTO, 2),
 	}
 }
@@ -50,8 +50,8 @@ func (m *MonoConnection) Serve() {
 	}()
 
 	log.Debug().Msg("Setting up handlers")
-	log.Info().Msgf("Your url is %s", m.bPFSHost+m.bPFSURLPath)
-	http.HandleFunc(m.bPFSURLPath, func(w http.ResponseWriter, r *http.Request) {
+	log.Info().Msgf("Your url is %s", m.fBSHost+m.fBSURLPath)
+	http.HandleFunc(m.fBSURLPath, func(w http.ResponseWriter, r *http.Request) {
 		if r.ContentLength == 0 && r.Method == http.MethodGet {
 			fmt.Fprint(w, "")
 			return
@@ -94,7 +94,7 @@ func (m *MonoConnection) webhookSetup() error {
 	m.checkServeStatus()
 	webhook, err := json.Marshal(struct {
 		WebHookUrl string `json:"webHookUrl"`
-	}{WebHookUrl: m.bPFSHost + m.bPFSURLPath})
+	}{WebHookUrl: m.fBSHost + m.fBSURLPath})
 	cl := &http.Client{Timeout: time.Second * 30}
 	req, err := http.NewRequest(http.MethodPost, m.monoAPIURL+monoWebhookAPIPath, bytes.NewReader(webhook))
 	if err != nil {
@@ -121,7 +121,7 @@ func (m *MonoConnection) checkServeStatus() {
 	time.Sleep(time.Second * 2)
 	cl := &http.Client{Timeout: time.Second * 5}
 	for {
-		if resp, err := cl.Get(m.bPFSHost + m.bPFSURLPath); err == nil && resp.StatusCode == http.StatusOK {
+		if resp, err := cl.Get(m.fBSHost + m.fBSURLPath); err == nil && resp.StatusCode == http.StatusOK {
 			return
 		}
 		log.Debug().Msg("Mono serve is still warming up")

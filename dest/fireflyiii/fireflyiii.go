@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/sudores/firefly-iii-bank-sync/bank/dto"
 	"github.com/sudores/firefly-iii-bank-sync/util"
-	"github.com/rs/zerolog/log"
 )
 
 type FireflyiiiConnection struct {
@@ -128,14 +128,14 @@ func (f *FireflyiiiConnection) getCorrespondingAccountName(accountID string) (st
 		return "", err
 	}
 	for _, v := range accounts.Data {
-		config := extractBPFSConfig(v.Attributes.Notes, accountID)
+		config := extractFBSConfig(v.Attributes.Notes, accountID)
 		if len(config) != 0 {
 			if strings.Split(config[0], ":")[1] == accountID {
 				return v.Attributes.Name, nil
 			}
 		}
 	}
-	return "", errors.New("Valid BPFS config not found for any account")
+	return "", ErrFBSConfigNotFound
 }
 
 func (f *FireflyiiiConnection) getCorrespondingAccountID(accountID string) (string, error) {
@@ -144,18 +144,18 @@ func (f *FireflyiiiConnection) getCorrespondingAccountID(accountID string) (stri
 		return "", err
 	}
 	for _, v := range accounts.Data {
-		config := extractBPFSConfig(v.Attributes.Notes, accountID)
+		config := extractFBSConfig(v.Attributes.Notes, accountID)
 		if len(config) != 0 {
 			if strings.Split(config[0], ":")[1] == accountID {
 				return v.Attributes.ID, nil
 			}
 		}
 	}
-	return "", errors.New("Valid BPFS config not found for any account")
+	return "", ErrFBSConfigNotFound
 }
 
-func extractBPFSConfig(text, substring string) []string {
-	re := regexp.MustCompile(`bpfs\..*`)
+func extractFBSConfig(text, substring string) []string {
+	re := regexp.MustCompile(`fbs\..*`)
 	match := re.FindStringSubmatch(text)
 	return match
 }
