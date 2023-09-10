@@ -2,6 +2,7 @@ package mono
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"encoding/json"
 	"errors"
@@ -17,30 +18,29 @@ import (
 )
 
 type MonoConnection struct {
+	TransactionChan chan *dto.TransactionDTO
+
 	monoAPIURL   string
 	monoAPIToken string
 
-	listenAddr string
+	srv *http.Server
 
 	fBSHost    string
 	fBSURLPath string
-
-	webhookInitNotify chan uint8
-	TransactionChan   chan *dto.TransactionDTO
 }
 
 func NewMonoConnetion(APIToken, FBSHost, listenAddr string) *MonoConnection {
 	return &MonoConnection{
 		monoAPIURL:      monoAPIURL,
 		monoAPIToken:    APIToken,
-		listenAddr:      listenAddr,
+		srv:             &http.Server{Addr: listenAddr},
 		fBSHost:         FBSHost,
 		fBSURLPath:      "/" + getPathSuffix(),
 		TransactionChan: make(chan *dto.TransactionDTO, 2),
 	}
 }
 
-func (m *MonoConnection) Serve() {
+func (m *MonoConnection) Serve() error {
 	go func() {
 		log.Debug().Msg("Setting up webhook")
 		if err := m.webhookSetup(); err != nil {
@@ -52,7 +52,7 @@ func (m *MonoConnection) Serve() {
 	log.Debug().Msg("Setting up handlers")
 	log.Info().Msgf("Your url is %s", m.fBSHost+m.fBSURLPath)
 	http.HandleFunc(m.fBSURLPath, func(w http.ResponseWriter, r *http.Request) {
-		if r.ContentLength == 0 && r.Method == http.MethodGet {
+		if r.ContentLength == 0 && r.Method == http.MethodGet { // TODO: Move to the separate function
 			fmt.Fprint(w, "")
 			return
 		}
@@ -72,11 +72,12 @@ func (m *MonoConnection) Serve() {
 
 	})
 	log.Info().Msg("Mono starting serving")
-	log.Fatal().Msg(http.ListenAndServe(m.listenAddr, nil).Error())
+	return m.srv.ListenAndServe()
 }
 
-func processBadRequests(w http.ResponseWriter, r *http.Request) {
-	return
+func (m *MonoConnection) Shutdown(ctx context.Context) error {
+	log.Info().Msg("Shutting down mono connection. Bye!!!")
+	return m.srv.Shutdown(ctx)
 }
 
 func (m *MonoConnection) processWebhookStatementItemPost(w http.ResponseWriter, r *http.Request) {
@@ -121,7 +122,15 @@ func (m *MonoConnection) checkServeStatus() {
 	time.Sleep(time.Second * 2)
 	cl := &http.Client{Timeout: time.Second * 5}
 	for {
-		if resp, err := cl.Get(m.fBSHost + m.fBSURLPath); err == nil && resp.StatusCode == http.StatusOK {
+		time.Sleep(time.Second * 2)
+		resp, err := cl.Get(m.fBSHost + m.fBSURLPath)
+		if err != nil {
+			return
+		}
+		body, _ := io.ReadAll(resp.Body)
+		log.Debug().Msg(string(body))
+		log.Debug().Msg(resp.Status)
+		if resp.StatusCode == http.StatusOK {
 			return
 		}
 		log.Debug().Msg("Mono serve is still warming up")

@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"os"
-	"sync"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -16,29 +19,29 @@ func main() {
 	// Getting configuration
 	cfg, err := cnf.Parse()
 	if err != nil {
-		log.Err(err).Msg("Failed to initialize logging")
+		log.Fatal().Err(err).Msg("Failed to initialize logging")
 	}
 
 	// Setup logging
 	loggingInit(cfg.LogLevel)
 	log.Info().Msg("Logging setup success")
 
-	wg := sync.WaitGroup{}
+	exit := make(chan os.Signal)
+	signal.Notify(exit, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP, syscall.SIGQUIT)
+
 	ffi := firelfyiii.NewFireflyiiiConnection(cfg.FFIToken, cfg.FFIURL)
+	ffiCtx, ffiCancel := context.WithCancel(context.Background())
+	defer ffiCancel()
 	go func() {
-		wg.Add(1)
 		log.Info().Msg("Firefly-iii starting serving")
-		ffi.Serve()
+		ffi.Serve(ffiCtx)
 		log.Fatal().Err(err).Msg("Firefly serve failed")
-		wg.Done()
 	}()
 
 	mb := mono.NewMonoConnetion(cfg.MonobankAPIToken, cfg.FBSHost, cfg.ListenAddr)
 	go func() {
-		wg.Add(1)
 		log.Info().Msg("Monobank starting serving")
 		mb.Serve()
-		wg.Done()
 	}()
 	go func() {
 
@@ -49,7 +52,18 @@ func main() {
 		}
 
 	}()
-	wg.Wait()
+
+	osSig := <-exit
+	log.Info().Msgf("%s received. Shutting down...", osSig.String())
+
+	// TODO: Add contexts cancellation
+	mbCtx, mbCancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer mbCancel()
+	if err := mb.Shutdown(mbCtx); err != nil {
+		log.Fatal().Err(err).Msg("Monobank shutdown failed with error")
+	}
+
+	log.Info().Msg("Shutdown successful. Bye!!!")
 }
 
 // loggingInit setups the logging of whole bot

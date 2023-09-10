@@ -2,6 +2,7 @@ package firelfyiii
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -32,41 +33,52 @@ func NewFireflyiiiConnection(PAT, FireflyiiiURL string) *FireflyiiiConnection {
 	}
 }
 
-func (f *FireflyiiiConnection) Serve() {
-	for trans := range f.FireflyiiiTransactionChan {
-		log.Debug().Msg("ffi Transaction received")
-		go func(trans *dto.TransactionDTO) {
-			if err := f.createTransaction(trans); err != nil {
-				log.Warn().Err(err).Msgf("Failed to create transaction with id: %s", trans.Transaction.ID)
+func (f *FireflyiiiConnection) Serve(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			close(f.FireflyiiiTransactionChan)
+			log.Trace().Msg("Firefly-iii channel is closed")
+		case trans, ok := <-f.FireflyiiiTransactionChan:
+			log.Debug().Msg("ffi Transaction received")
+			go func(trans *dto.TransactionDTO) {
+				if err := f.createTransaction(ctx, trans); err != nil {
+					log.Warn().Err(err).Msgf("Failed to create transaction with id: %s", trans.Transaction.ID)
+				}
+				return
+			}(trans)
+			log.Debug().Msg("ffi Transaction created")
+			if !ok {
+				log.Info().Msg("Shutting down firefly-iii connection. Bye!!!")
+				return
 			}
-			return
-		}(trans)
+		}
 	}
 }
 
-func (f *FireflyiiiConnection) createTransaction(trans *dto.TransactionDTO) error {
+func (f *FireflyiiiConnection) createTransaction(ctx context.Context, trans *dto.TransactionDTO) error {
 	if trans.Transaction.Amount == 0 {
 		return errors.New("Transactions with zero amount are not accepted")
 	}
 	if trans.Transaction.Amount < 0 {
 		log.Debug().Msg("Creating withdrawal")
-		if err := f.createWithdrawal(trans); err != nil {
+		if err := f.createWithdrawal(ctx, trans); err != nil {
 			return err
 		}
 		return nil
 	}
 	log.Debug().Msg("Creating deposit")
-	if err := f.createDeposit(trans); err != nil {
+	if err := f.createDeposit(ctx, trans); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (f *FireflyiiiConnection) createWithdrawal(trans *dto.TransactionDTO) error {
+func (f *FireflyiiiConnection) createWithdrawal(ctx context.Context, trans *dto.TransactionDTO) error {
 	tr := transactionDTOToTransaction(trans)
 	// Get corresponding to transaction account
-	accountID, err := f.getCorrespondingAccountID(trans.AccountID)
-	accountName, err := f.getCorrespondingAccountName(trans.AccountID)
+	accountID, err := f.getCorrespondingAccountID(ctx, trans.AccountID)
+	accountName, err := f.getCorrespondingAccountName(ctx, trans.AccountID)
 	if err != nil {
 		return err
 	}
@@ -77,7 +89,7 @@ func (f *FireflyiiiConnection) createWithdrawal(trans *dto.TransactionDTO) error
 	if err != nil {
 		return err
 	}
-	req, err := f.newRequest(http.MethodPost, fireflyiiiTransactionPath, bytes.NewReader(body))
+	req, err := f.newRequest(ctx, http.MethodPost, fireflyiiiTransactionPath, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -87,17 +99,17 @@ func (f *FireflyiiiConnection) createWithdrawal(trans *dto.TransactionDTO) error
 		return err
 	}
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusUnprocessableEntity { // TODO: Try to undertand why transaction is created but wrong body is returned
+	if resp.StatusCode != http.StatusOK {
 		return errors.New(fmt.Sprint("Failed to create transaction, status code: ", resp.StatusCode, " ", string(body)))
 	}
 	return nil
 }
 
-func (f *FireflyiiiConnection) createDeposit(trans *dto.TransactionDTO) error {
+func (f *FireflyiiiConnection) createDeposit(ctx context.Context, trans *dto.TransactionDTO) error {
 	tr := transactionDTOToTransaction(trans)
 	// Get corresponding to transaction account
-	accountID, err := f.getCorrespondingAccountID(trans.AccountID)
-	accountName, err := f.getCorrespondingAccountName(trans.AccountID)
+	accountID, err := f.getCorrespondingAccountID(ctx, trans.AccountID)
+	accountName, err := f.getCorrespondingAccountName(ctx, trans.AccountID)
 	if err != nil {
 		return err
 	}
@@ -108,7 +120,7 @@ func (f *FireflyiiiConnection) createDeposit(trans *dto.TransactionDTO) error {
 	if err != nil {
 		return err
 	}
-	req, err := f.newRequest(http.MethodPost, fireflyiiiTransactionPath, bytes.NewReader(body))
+	req, err := f.newRequest(ctx, http.MethodPost, fireflyiiiTransactionPath, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -122,8 +134,8 @@ func (f *FireflyiiiConnection) createDeposit(trans *dto.TransactionDTO) error {
 	return nil
 }
 
-func (f *FireflyiiiConnection) getCorrespondingAccountName(accountID string) (string, error) {
-	accounts, err := f.getAccountList()
+func (f *FireflyiiiConnection) getCorrespondingAccountName(ctx context.Context, accountID string) (string, error) {
+	accounts, err := f.getAccountList(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -138,8 +150,8 @@ func (f *FireflyiiiConnection) getCorrespondingAccountName(accountID string) (st
 	return "", ErrFBSConfigNotFound
 }
 
-func (f *FireflyiiiConnection) getCorrespondingAccountID(accountID string) (string, error) {
-	accounts, err := f.getAccountList()
+func (f *FireflyiiiConnection) getCorrespondingAccountID(ctx context.Context, accountID string) (string, error) {
+	accounts, err := f.getAccountList(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -160,8 +172,8 @@ func extractFBSConfig(text, substring string) []string {
 	return match
 }
 
-func (f *FireflyiiiConnection) getAccountList() (*accounts, error) {
-	req, err := f.newRequest(http.MethodGet, fireflyiiiAccountsPath, nil)
+func (f *FireflyiiiConnection) getAccountList(ctx context.Context) (*accounts, error) {
+	req, err := f.newRequest(ctx, http.MethodGet, fireflyiiiAccountsPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -181,8 +193,8 @@ func (f *FireflyiiiConnection) getAccountList() (*accounts, error) {
 
 }
 
-func (f *FireflyiiiConnection) newRequest(method, path string, body io.Reader) (*http.Request, error) {
-	req, err := http.NewRequest(method, f.FireflyiiiURL+path, body)
+func (f *FireflyiiiConnection) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, f.FireflyiiiURL+path, body)
 	if err != nil {
 		return nil, err
 	}
