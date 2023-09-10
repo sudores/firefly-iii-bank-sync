@@ -17,3 +17,7 @@ firefly-iii-bank-sync
 
 # Go workspace file
 go.work
+
+# Environemnt file with variables for test purposes
+
+.env.sec
