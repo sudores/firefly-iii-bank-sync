@@ -1,0 +1,24 @@
+kind: pipeline
+type: docker
+name: script-firefly-iii-budget-resp
+
+steps:
+  - name: Build clear
+    image: docker:dind
+    volumes:
+      - name: dockersock
+        path: /var/run/
+    commands:
+      - docker build . -t vepl/firefly-iii-bank-sync
+      - echo ${DOCKER_PAT} | docker login -u vepl
+      - docker push vepl/firefly-iii-bank-sync 
+    environment:
+      DOCKER_PAT:
+        from_secret: DOCKER_PAT
+    when:
+      branch:
+      - master
+
+volumes:
+- name: dockersock
+  temp: {}
