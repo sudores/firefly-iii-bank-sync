@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-firefly-iii-bank-sync
+app
 
 # Test binary, built with `go test -c`
 *.test
