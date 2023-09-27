@@ -10,7 +10,7 @@ steps:
         path: /var/run/docker.sock
     commands:
       - docker build . -t vepl/firefly-iii-bank-sync
-      - echo ${DOCKER_PAT} | docker login -u vepl --password-stdin
+      - docker login -u vepl -p $DOCKER_PAT
       - docker push vepl/firefly-iii-bank-sync 
     environment:
       DOCKER_PAT:
