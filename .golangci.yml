@@ -1,0 +1,15 @@
+run:
+  concurrency: 2
+  timeout: 5m
+  tests: false
+presets:
+  - bugs
+  - style
+  - comment
+  - error
+  - format
+  - import
+  - metalinter
+  - preformance
+  - module
+  - unused
