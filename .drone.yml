@@ -7,7 +7,7 @@ steps:
     image: docker:dind
     volumes:
       - name: dockersock
-        path: /var/run/
+        path: /var/run/docker.sock
     commands:
       - docker build . -t vepl/firefly-iii-bank-sync
       - echo ${DOCKER_PAT} | docker login -u vepl
@@ -21,4 +21,5 @@ steps:
 
 volumes:
 - name: dockersock
-  temp: {}
+  host:
+    path: /var/run/docker.sock
